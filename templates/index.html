@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nounours🚣‍♀️</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+   
+  </style>
+  
+  
+</head>
+<body class="bg-gray-900 text-gray-200 flex items-center justify-center h-screen ">
+  <div class="flex flex-col lg:flex-row w-full h-full justify-center items-center space-y-8 lg:space-y-0 lg:space-x-8 p-4">
+    <!-- Video Feed Section -->
+    <div class="relative w-full lg:w-1/2 flex justify-center items-center">
+      <video id="video" class="w-full lg:w-auto  rounded-lg shadow-lg" playsinline></video>
+      <canvas id="output" class="absolute top-0 left-0 w-full h-full rounded-lg shadow-lg"></canvas>
+    </div>
+
+    <!-- Graphs Section -->
+    <div class="flex flex-col space-y-4 w-full lg:w-1/2 h-full lg:justify-between">
+      <canvas id="yGraph" class="w-full h-64 lg:h-1/2 rounded-lg bg-gray-800 shadow-lg"></canvas>
+      <canvas id="xGraph" class="w-full h-64 lg:h-1/2 rounded-lg bg-gray-800 shadow-lg"></canvas>
+    </div>
+  </div>
+</body>
+
+
+  <script>
+    const videoElement = document.getElementById('video');
+    const canvasElement = document.getElementById('output');
+    const canvasCtx = canvasElement.getContext('2d');
+
+    const pose = new Pose({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
+    });
+    pose.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+
+    let previousLandmarks = null;
+
+    // Chart.js setup
+    const yGraphCtx = document.getElementById('yGraph').getContext('2d');
+    const xGraphCtx = document.getElementById('xGraph').getContext('2d');
+
+    const yGraph = new Chart(yGraphCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'Left Hand Y', borderColor: 'red', data: [], fill: false },
+          { label: 'Right Hand Y', borderColor: 'green', data: [], fill: false },
+          { label: 'Left Knee Y', borderColor: 'blue', data: [], fill: false },
+          { label: 'Right Knee Y', borderColor: 'yellow', data: [], fill: false },
+        ],
+      },
+      options: { animation: false, responsive: true, scales: { x: { ticks: { color: '#fff' } }, y: { ticks: { color: '#fff' } } } },
+    });
+
+    const xGraph = new Chart(xGraphCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'Left Hip X', borderColor: 'pink', data: [], fill: false },
+          { label: 'Right Hip X', borderColor: 'cyan', data: [], fill: false },
+          { label: 'Left Shoulder X', borderColor: 'orange', data: [], fill: false },
+          { label: 'Right Shoulder X', borderColor: 'purple', data: [], fill: false },
+          { label: 'Left Elbow X', borderColor: 'lime', data: [], fill: false },
+          { label: 'Right Elbow X', borderColor: 'magenta', data: [], fill: false },
+        ],
+      },
+      options: { animation: false, responsive: true, scales: { x: { ticks: { color: '#fff' } }, y: { ticks: { color: '#fff' } } } },
+    });
+
+    pose.onResults((results) => {
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      // Draw the video frame
+      canvasCtx.drawImage(
+        results.image,
+        0,
+        0,
+        canvasElement.width,
+        canvasElement.height
+      );
+
+      if (results.poseLandmarks) {
+        const leftHand = results.poseLandmarks[15];
+        const rightHand = results.poseLandmarks[16];
+        const leftKnee = results.poseLandmarks[25];
+        const rightKnee = results.poseLandmarks[26];
+        const leftHip = results.poseLandmarks[23];
+        const rightHip = results.poseLandmarks[24];
+        const leftShoulder = results.poseLandmarks[11];
+        const rightShoulder = results.poseLandmarks[12];
+        const leftElbow = results.poseLandmarks[13];
+        const rightElbow = results.poseLandmarks[14];
+
+        let leftColor = 'green';
+        let rightColor = 'green';
+
+        if (previousLandmarks) {
+          const leftHandPrev = previousLandmarks[15];
+          const rightHandPrev = previousLandmarks[16];
+
+          const leftDx = leftHand.x - leftHandPrev.x;
+          const leftDy = leftHand.y - leftHandPrev.y;
+
+          const rightDx = rightHand.x - rightHandPrev.x;
+          const rightDy = rightHand.y - rightHandPrev.y;
+
+          if (Math.abs(leftDy) > Math.abs(leftDx)) leftColor = 'red';
+          if (Math.abs(rightDy) > Math.abs(rightDx)) rightColor = 'red';
+        }
+
+        // Draw skeleton
+        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#fff', lineWidth: 2 });
+        drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#fff', lineWidth: 1 });
+
+        // Draw hands with filled colors
+        canvasCtx.fillStyle = leftColor;
+        canvasCtx.beginPath();
+        canvasCtx.arc(leftHand.x * canvasElement.width, leftHand.y * canvasElement.height, 8, 0, 2 * Math.PI);
+        canvasCtx.fill();
+
+        canvasCtx.fillStyle = rightColor;
+        canvasCtx.beginPath();
+        canvasCtx.arc(rightHand.x * canvasElement.width, rightHand.y * canvasElement.height, 8, 0, 2 * Math.PI);
+        canvasCtx.fill();
+
+        // Update graphs
+        const time = new Date().toLocaleTimeString();
+        yGraph.data.labels.push(time);
+        yGraph.data.datasets[0].data.push(leftHand.y);
+        yGraph.data.datasets[1].data.push(rightHand.y);
+        yGraph.data.datasets[2].data.push(leftKnee.y);
+        yGraph.data.datasets[3].data.push(rightKnee.y);
+
+        xGraph.data.labels.push(time);
+        xGraph.data.datasets[0].data.push(leftHip.x);
+        xGraph.data.datasets[1].data.push(rightHip.x);
+        xGraph.data.datasets[2].data.push(leftShoulder.x);
+        xGraph.data.datasets[3].data.push(rightShoulder.x);
+        xGraph.data.datasets[4].data.push(leftElbow.x);
+        xGraph.data.datasets[5].data.push(rightElbow.x);
+
+        // Keep graph data manageable
+        if (yGraph.data.labels.length > 50) {
+          yGraph.data.labels.shift();
+          yGraph.data.datasets.forEach((dataset) => dataset.data.shift());
+        }
+        if (xGraph.data.labels.length > 50) {
+          xGraph.data.labels.shift();
+          xGraph.data.datasets.forEach((dataset) => dataset.data.shift());
+        }
+
+        yGraph.update();
+        xGraph.update();
+
+        previousLandmarks = results.poseLandmarks;
+      }
+
+      canvasCtx.restore();
+    });
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await pose.send({ image: videoElement });
+      },
+      width: 640,
+      height: 480,
+    });
+    camera.start();
+  </script>
+</body>
+</html>
